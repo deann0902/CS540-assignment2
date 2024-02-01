@@ -230,6 +230,86 @@ public:
 
     // Given an ID, find the relevant record and print it
     Record findRecordById(int id) {
-        
+    ifstream fin(gNewFileName, ios::binary);
+    if (!fin.is_open()) {
+        cerr << "Error: could not open file " << gNewFileName << "\n";
+        return Record();
     }
+
+    const int maxPagesPerBatch = 3; 
+    int currentBatchStartPage = 0; 
+    bool found = false; 
+    Record foundRecord; 
+
+    while (!found) {
+        for (int i = 0; i < maxPagesPerBatch; ++i) {
+            int currentPage = currentBatchStartPage + i;
+            fin.seekg(PAGE_SIZE * currentPage, ios::beg);
+
+            vector<char> buffer(PAGE_SIZE);
+            fin.read(buffer.data(), PAGE_SIZE);
+            if (fin.gcount() == 0) {
+                break; 
+            }
+
+            
+            string endMarker = "$";
+            size_t markerPos = string(buffer.begin(), buffer.end()).find(endMarker);
+            if (markerPos == string::npos) {
+                continue; 
+            }
+
+            string slotDirString(buffer.begin() + markerPos + endMarker.length(), buffer.end());
+            stringstream slotDirStream(slotDirString);
+            string slotValue;
+            vector<int> slotData;
+            while (getline(slotDirStream, slotValue, ',')) {
+                if (!slotValue.empty() && all_of(slotValue.begin(), slotValue.end(), ::isdigit)) {
+                    slotData.push_back(stoi(slotValue));
+                }  else {
+                    cerr << "Invalid slot value: " << slotValue << "\n";
+                    break; 
+                }
+            }
+
+            for (size_t j = 0; j < slotData.size() - 1; j += 2) {
+                int recordStart = slotData[j];
+                int recordSize = slotData[j + 1];
+                if (recordStart + recordSize <= PAGE_SIZE) {
+                    string recordData(buffer.begin() + recordStart, buffer.begin() + recordStart + recordSize);
+                    stringstream ss(recordData);
+                    vector<string> fields;
+                    string field;
+                    while (getline(ss, field, ',')) {
+                        fields.push_back(field);
+                    }
+
+                    if (fields.size() >= 4 && stoi(fields[0]) == id) {
+                        found = true;
+                        foundRecord = Record(fields);
+                        break;
+                    }
+                }
+            }
+
+            if (found) {
+                break; 
+            }
+        }
+
+        if (found) {
+            break; 
+        }
+
+        currentBatchStartPage += maxPagesPerBatch; 
+    }
+
+    fin.close();
+    if (found) {
+        return foundRecord; 
+    } else {
+        cerr << "Record with ID " << id << " not found\n";
+        return Record(); 
+    }
+}
 };
