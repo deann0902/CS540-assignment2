@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sstream>
 #include <bitset>
+#include <stack>
+
 using namespace std;
 
 class Record {
@@ -37,27 +39,47 @@ private:
     const int PAGE_SIZE = 4096;
     int numRecords = 0;
     int currentRecordPos = 0;
+    int currPage = 1;
+    int SlotDsize = 0;
     string gNewFileName;
     vector<char> Data;
-    vector<char> SlotD;
+    stack<string> SlotD;
 
     void StoreRecord() {
+        string sizeofData = to_string(Data.size());
+        string sizeofentries = to_string(numRecords);
+
         fstream fin;
-        fin.open(gNewFileName,ios::out);
+        fin.open(gNewFileName,ios::out| ios::in);
         if(fin.is_open()) { 
+            fin.seekp(PAGE_SIZE*(currPage - 1));
             for (int i = 0; i < Data.size(); i++) {
                 fin << Data[i];
             }
+            fin.seekp(PAGE_SIZE*currPage - SlotDsize - sizeofentries.length() - sizeofData.length() - 3);
+            //stop string
+            fin << "$";
+            while(!SlotD.empty()) {
+                string kpop = SlotD.top();
+                fin << kpop;
+                SlotD.pop();
+            }
+            fin << sizeofentries;
+            fin << ",";
+            fin << sizeofData;
+            fin << "\n";
         }
+        fin.close();
+        return;
     }
+
 
     // Insert new record 
     void insertRecord(Record record) {
-        record.print();
+        // record.print();
         vector<char> tempData;
         int tempsize;
         string t;
-        vector<char> tempSlotD;
         t = to_string(record.id);
         // Add record into temp vec
         char const* id_char = t.c_str();
@@ -84,77 +106,71 @@ private:
 
         // Catch record size
         tempsize = tempData.size();
-        
-        // No records written yet
-        if (numRecords == 0) {
-            // Initialize first block
-
-            // In first block, we don't consider, just push
-            for (int i = 0; i < tempsize; i++) {
-                Data.push_back(tempData[i]);
-            }
-            t = to_string(tempsize);
-            char const* DataSize_char = t.c_str();
-            SlotD.push_back('0');
-            SlotD.push_back(',');
-            for (int i = 0; i < t.length();i++) {
-                SlotD.push_back(DataSize_char[i]);
-            }
-            SlotD.push_back(',');
-            currentRecordPos += tempsize;
-            numRecords++;
-            cout<<"\nCurrent Data Size is "<<Data.size()<<"\n";
-            return ;
-        }
+        string index = to_string(currentRecordPos) + "," + to_string(tempsize) + ",";
         // Add record to the block
 
         // Catch SlotDirectory in temp vec
-        t = to_string(tempsize);
-        char const* DataSize_char = t.c_str();
-        string r = to_string(currentRecordPos);
-        char const* Pos_char = r.c_str();
-        for (int i = 0; i < r.length();i++) {
-            tempSlotD.push_back(Pos_char[i]);
-        }
-        tempSlotD.push_back(',');
-        for (int i = 0; i < t.length();i++) {
-            tempSlotD.push_back(DataSize_char[i]);
-        }
-        tempSlotD.push_back(',');
-        currentRecordPos += tempsize;
-        numRecords++;
+        
         string sizeofData = to_string(Data.size());
         string sizeofentries = to_string(numRecords);
         
-        // Our page will be like (Records + SlotDirectory + Number of entries + Pointer to free space)
+        // Our page will be like (Records + "$" sign + SlotDirectory + Number of entries + "," + Pointer to free space + "\n")
         // if the size of new record plus the size of the exists records doesn't exceed the size of a page, we add this record
-        if ((tempData.size() + tempSlotD.size()) + (Data.size() + SlotD.size()) + sizeofentries.length() + sizeofData.length() <= PAGE_SIZE) {
+        if ((tempData.size() + index.length()) + (Data.size() + SlotDsize) + 1 + sizeofentries.length() + 1 + sizeofData.length() + 1 <= PAGE_SIZE) {
+            currentRecordPos += tempsize;
+            numRecords++;
             for (int i = 0; i < tempsize; i++) {
                 Data.push_back(tempData[i]);
             }
-            for (int i = 0; i < tempSlotD.size(); i++) {
-                SlotD.push_back(tempSlotD[i]);
-            }
+            SlotD.push(index);
+            SlotDsize += index.length();
+            return;
         }
         
         // Take neccessary steps if capacity is reached (you've utilized all the blocks in main memory)
         // Because the page fault, we write our page into the file and flush the page for new records
         else {
+            //First we merge the record and slotdirectory
+            
             fstream fin;
-            fin.open(gNewFileName,ios::out);
+            fin.open(gNewFileName,ios::out| ios::in);
             if(fin.is_open()) { 
+                fin.seekp(PAGE_SIZE*(currPage - 1));
                 for (int i = 0; i < Data.size(); i++) {
                     fin << Data[i];
                 }
+                fin.seekp(PAGE_SIZE*currPage - SlotDsize - sizeofentries.length() - sizeofData.length() - 3);
+                //stop string
+                fin << "$";
+                while(!SlotD.empty()) {
+                    string kpop = SlotD.top();
+                    fin << kpop;
+                    SlotD.pop();
+                }
+                fin << sizeofentries;
+                fin << ",";
+                fin << sizeofData;
                 fin << "\n";
             }
+            fin.close();
+            currPage++;
 
-            //clear after print
+            //clear after write into the file
+            SlotDsize = 0;
+            numRecords = 0;
+            currentRecordPos = 0;
             Data.clear();
-            SlotD.clear();
+            SlotD = {};
 
         }
-        cout<<"\nCurrent Data Size is "<<Data.size()<<"\n";
+        // Then write after clear 
+        numRecords++;
+        index = to_string(currentRecordPos) + "," + to_string(tempsize) + ",";
+        for (int i = 0; i < tempsize; i++) {
+            Data.push_back(tempData[i]);
+        }
+        SlotD.push(index);
+        SlotDsize += index.length();
 
     }
 
@@ -189,7 +205,8 @@ public:
         string lineinfile;
         bool Flag = true;
         while (getline(fin,lineinfile) || Flag) {
-            if (lineinfile == "") {
+            if (lineinfile.empty()) {
+                // End of the file, congrat
                 Flag = false;
                 StoreRecord();
                 break;
