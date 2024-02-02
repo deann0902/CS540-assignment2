@@ -12,6 +12,7 @@ class Record {
 public:
     int id, manager_id;
     std::string bio, name;
+Record() : id(0), manager_id(0), bio(""), name("");
 
     Record(vector<std::string> fields) {
         id = stoi(fields[0]);
@@ -50,7 +51,7 @@ private:
         string sizeofentries = to_string(numRecords);
 
         fstream fin;
-        fin.open(gNewFileName,ios::out| ios::in);
+        fin.open(gNewFileName,ios::binary| ios::out| ios::in);
         if(fin.is_open()) { 
             fin.seekp(PAGE_SIZE*(currPage - 1));
             for (int i = 0; i < Data.size(); i++) {
@@ -114,8 +115,9 @@ private:
         string sizeofData = to_string(Data.size());
         string sizeofentries = to_string(numRecords);
         
+// This basic idea is to design a page that doesn't exist 4096 KB
         // Our page will be like (Records + "$" sign + SlotDirectory + Number of entries + "," + Pointer to free space + "\n")
-        // if the size of new record plus the size of the exists records doesn't exceed the size of a page, we add this record
+        // If the size of new record plus the size of the exists records doesn't exceed the size of a page, we add this record
         if ((tempData.size() + index.length()) + (Data.size() + SlotDsize) + 1 + sizeofentries.length() + 1 + sizeofData.length() + 1 <= PAGE_SIZE) {
             currentRecordPos += tempsize;
             numRecords++;
@@ -133,7 +135,7 @@ private:
             //First we merge the record and slotdirectory
             
             fstream fin;
-            fin.open(gNewFileName,ios::out| ios::in);
+            fin.open(gNewFileName,ios::binary| ios::out| ios::in);
             if(fin.is_open()) { 
                 fin.seekp(PAGE_SIZE*(currPage - 1));
                 for (int i = 0; i < Data.size(); i++) {
@@ -181,9 +183,9 @@ public:
         ofstream fin;
 
         // Create your EmployeeRelation file 
-        fin.open(NewFileName,ios::out);
+        fin.open(NewFileName,ios::binary| ios::out);
         if(!fin) { 
-            cout<<"Error in creating file!!!\n"; 
+            cerr<<"Error in creating file!!!\n"; 
             return ; 
         } 
         fin.close();
@@ -206,7 +208,7 @@ public:
         bool Flag = true;
         while (getline(fin,lineinfile) || Flag) {
             if (lineinfile.empty()) {
-                // End of the file, congrat
+                // End of the file, just record it to target file
                 Flag = false;
                 StoreRecord();
                 break;
