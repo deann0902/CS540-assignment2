@@ -165,10 +165,10 @@ private:
             SlotD = {};
 
         }
-        // Then write after clear 
+        // Then write after clear, because it's first record, we don't think, we push
         numRecords++;
+        index = to_string(currentRecordPos) + "$" + to_string(tempsize) + "$";
         currentRecordPos += tempsize;
-        index = to_string(currentRecordPos) + "," + to_string(tempsize) + ",";
         for (int i = 0; i < tempsize; i++) {
             Data.push_back(tempData[i]);
         }
