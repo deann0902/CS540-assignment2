@@ -167,6 +167,7 @@ private:
         }
         // Then write after clear 
         numRecords++;
+        currentRecordPos += tempsize;
         index = to_string(currentRecordPos) + "," + to_string(tempsize) + ",";
         for (int i = 0; i < tempsize; i++) {
             Data.push_back(tempData[i]);
