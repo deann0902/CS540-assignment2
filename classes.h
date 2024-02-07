@@ -233,86 +233,69 @@ public:
 
     // Given an ID, find the relevant record and print it
     Record findRecordById(int id) {
-    ifstream fin(gNewFileName, ios::binary);
-    if (!fin.is_open()) {
-        cerr << "Error: could not open file " << gNewFileName << "\n";
-        return Record();
-    }
+        ifstream fin(gNewFileName, ios::in);
+        if (!fin.is_open()) {
+            cerr << "Error: could not open file " << gNewFileName << "\n";
+            return Record();
+        }
 
-    const int maxPagesPerBatch = 3; 
-    int currentBatchStartPage = 0; 
-    bool found = false; 
-    Record foundRecord; 
+        string line;
+        bool found = false;
+        Record record;
 
-    while (!found) {
-        for (int i = 0; i < maxPagesPerBatch; ++i) {
-            int currentPage = currentBatchStartPage + i;
-            fin.seekg(PAGE_SIZE * currentPage, ios::beg);
+        while (getline(fin, line)) {
+            vector<string> fields; 
+            fields.clear();
 
-            vector<char> buffer(PAGE_SIZE);
-            fin.read(buffer.data(), PAGE_SIZE);
-            if (fin.gcount() == 0) {
-                break; 
+            if (line.find('$') != string::npos) {
+                line = line.substr(0, line.find('$')); 
             }
 
-            
-            string endMarker = "$";
-            size_t markerPos = string(buffer.begin(), buffer.end()).find(endMarker);
-            if (markerPos == string::npos) {
-                continue; 
-            }
-
-            string slotDirString(buffer.begin() + markerPos + endMarker.length(), buffer.end());
-            stringstream slotDirStream(slotDirString);
-            string slotValue;
-            vector<int> slotData;
-            while (getline(slotDirStream, slotValue, ',')) {
-                if (!slotValue.empty() && all_of(slotValue.begin(), slotValue.end(), ::isdigit)) {
-                    slotData.push_back(stoi(slotValue));
-                }  else {
-                    cerr << "Invalid slot value: " << slotValue << "\n";
-                    break; 
+            stringstream ss(line);
+            string field;
+            while (getline(ss, field, ',')) {
+                if (field == "$") {
+                    break;
                 }
+                fields.push_back(field);
             }
+            //cout << "Size of fields vector: " << fields.size() << endl;
+        
+            /*cout << "Values in fields[]: ";
+            for (const auto& value : fields) {
+                cout << value << " ";
+            }
+            cout << endl;*/
+            for (size_t i = 0; i < fields.size(); ++i) {
+                try {
+                    if (stoi(fields[i]) == id ) { // Exclude manager_id field
+                        if (i % 4 == 0) { 
+                            found = true;
+                            vector<string> recordFields(fields.begin() + i, fields.begin() + i + 4);
 
-            for (size_t j = 0; j < slotData.size() - 1; j += 2) {
-                int recordStart = slotData[j];
-                int recordSize = slotData[j + 1];
-                if (recordStart + recordSize <= PAGE_SIZE) {
-                    string recordData(buffer.begin() + recordStart, buffer.begin() + recordStart + recordSize);
-                    stringstream ss(recordData);
-                    vector<string> fields;
-                    string field;
-                    while (getline(ss, field, ',')) {
-                        fields.push_back(field);
+                            record = Record(recordFields);
+                            break; 
+                        }
                     }
-
-                    if (fields.size() >= 4 && stoi(fields[0]) == id) {
-                        found = true;
-                        foundRecord = Record(fields);
-                        break;
-                    }
+                } catch (const std::exception& e) {
+                    // Ignore non-integer fields
                 }
             }
 
             if (found) {
-                break; 
+                break; // Exit the while loop if record is found
             }
         }
 
+        fin.close();
+
         if (found) {
-            break; 
+            
+            return record;
+        } else {
+            cerr << "Record with ID " << id << " not found\n";
+            return Record();
         }
-
-        currentBatchStartPage += maxPagesPerBatch; 
+        
     }
-
-    fin.close();
-    if (found) {
-        return foundRecord; 
-    } else {
-        cerr << "Record with ID " << id << " not found\n";
-        return Record(); 
-    }
-}
 };
